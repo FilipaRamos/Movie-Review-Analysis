@@ -1,14 +1,19 @@
 import pandas as pd
 import numpy as np
 from matplotlib import pyplot
+
 from keras.models import Sequential, Model
 from keras.layers import Dense, Dropout, Activation, BatchNormalization, Conv1D, Flatten, MaxPooling1D, Embedding
 from keras import optimizers, regularizers
-from keras.optimizers import Nadam
+#from keras.optimizers import Nadam
 import keras.utils
+from keras.preprocessing.text import one_hot
+from keras.preprocessing.sequence import pad_sequences
+
 from sklearn.metrics import accuracy_score
 from sklearn.utils import shuffle
 from sklearn.model_selection import train_test_split
+
 import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import RegexpTokenizer
@@ -42,7 +47,7 @@ y = np.concatenate((y_neg,y_pos))
 # --> There is white space around punctuation like periods, commas, and brackets.
 # --> Text has been split into one sentence per line.
 
-def preprocess(sentence):
+def process_row(sentence):
     '''
     Convert to lowercase
     Remove ponctuation 
@@ -55,42 +60,49 @@ def preprocess(sentence):
     #Transform all plurals and conjugated verbs into simple form?
     return filtered_words
 
-X_clean = []
-for review in X:
-    X_clean.append(preprocess(review))
+def process_data(data):
+    data_clean = []
+    for d in data:
+        data_clean.append(process_row(d))
+    
+    vocab_size = len(np.unique(np.hstack(data_clean)))
+    print("Number of words: ", vocab_size)
+    
+    result = [len(d) for d in data_clean]
+    mean_length = np.mean(result)
+    max_length = np.max(result)
+    print("Mean %.2f words" % (mean_length))
+    pyplot.boxplot(result)
+    pyplot.show()
+    
+    encoded_data = [one_hot(" ".join(d), vocab_size) for d in data_clean]
+    padded_data = pad_sequences(encoded_data, maxlen=max_length, padding='post')
+    
+    return vocab_size, mean_length, max_length, padded_data
 
-# Number of unique words 
-print("Number of words: ", len(np.unique(np.hstack(X_clean))))
-
-# Summarize review length
-print("Review length: ")
-result = [len(x) for x in X_clean]
-print("Mean %.2f words (%f)" % (np.mean(result), np.std(result)))
-
-# plot review length
-pyplot.boxplot(result)
-pyplot.show()
-
+vocab_size, mean_length, max_length, padded_data = process_data(X)
 
 ### Model definition ###
 
-train_data, validation_data, train_labels, validation_labels = train_test_split(X_clean, y, train_size=0.8, test_size=0.2)
+def neural_network():
+    model = Sequential()
+    model.add(Embedding(input_dim=vocab_size, output_dim=32, input_length=max_length))
+    model.add(Flatten())
+    model.add(Dense(250, activation='relu'))
+    model.add(Dense(1, activation='sigmoid'))
+    model.compile(optimizer='adam', loss='binary_crossentropy',metrics=['accuracy'])
+    return model
 
-model = Sequential()
-model.add(Embedding(input_dim=len(train_data), output_dim=32, input_length=40))
-model.add(Flatten())
-model.add(Dense(250, activation='relu'))
-#model.add(BatchNormalization())
-#model.add(Dropout(0.5))
-model.add(Dense(1, activation='softmax'))
-model.compile(optimizer='adam', loss='binary_crossentropy',metrics=['accuracy'])
-print(model.summary())
+model1 = neural_network()
+model1.summary()
 
+train_data, validation_data, train_labels, validation_labels = train_test_split(padded_data, y, train_size=0.8, test_size=0.2)
 
-# Fitting the model: not working for now, some dimentionality issue in the Embedding 
+# Fit the model
+train_data, train_labels = shuffle(train_data, train_labels)
+model1.fit(train_data, train_labels, epochs=8, batch_size=64, verbose=1)
 
-#train_data, train_labels = shuffle(train_data, train_labels)
-#model.fit(train_data, train_labels, validation_data=(validation_data, validation_labels), epochs=2, batch_size=128, verbose=2)
-#print("accuracy of neural network :")
-#err = model.evaluate(validation_data,validation_labels)
-#print(err)
+# Final evaluation of the model
+loss, accuracy = model1.evaluate(validation_data, validation_labels, verbose=0)
+print('\nLoss: %.2f' % (loss))
+print('Accuracy: %.2f' % (accuracy*100))
