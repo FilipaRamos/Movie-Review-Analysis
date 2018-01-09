@@ -18,6 +18,9 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import RegexpTokenizer
 
+# random seed
+seed = 7
+np.random.seed(seed)
 
 ### Load data ###
 
@@ -82,7 +85,10 @@ def process_data(data):
 
 vocab_size, mean_length, max_length, padded_data = process_data(X)
 
+###############################################################################################
+
 ### Model definition ###
+### Multilayer perceptron ###
 
 def neural_network():
     model = Sequential()
@@ -106,3 +112,34 @@ model1.fit(train_data, train_labels, epochs=8, batch_size=64, verbose=1)
 loss, accuracy = model1.evaluate(validation_data, validation_labels, verbose=0)
 print('\nLoss: %.2f' % (loss))
 print('Accuracy: %.2f' % (accuracy*100))
+
+##############################################################################################
+
+### Convolutional neural network definition ###
+def conv_network():
+    # create the model
+    model = Sequential()
+    
+    # word embedding into vectors of numbers
+    model.add(Embedding(input_dim=vocab_size, output_dim=32, input_length=max_length))
+    model.add(Conv1D(filters=32, kernel_size=3, padding='same', activation='relu'))
+    model.add(MaxPooling1D(pool_size=2))
+    model.add(Flatten())
+    model.add(Dense(250, activation='relu'))
+    model.add(Dense(1, activation='sigmoid'))
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    return model
+
+# create convolutional model
+conv_model = conv_network()
+conv_model.summary()
+
+conv_train_data, conv_validation_data, conv_train_labels, conv_validation_labels = train_test_split(padded_data, y, train_size=0.8, test_size=0.2)
+
+# Fit the model
+conv_train_data, conv_train_labels = shuffle(conv_train_data, conv_train_labels)
+conv_model.fit(conv_train_data, conv_train_labels, epochs=8, batch_size=64, verbose=1)
+
+# Final evaluation of the model
+accuracy = conv_model.evaluate(conv_validation_data, conv_validation_labels, verbose=0)
+print('Accuracy: %.2f' % (accuracy[1]*100))
