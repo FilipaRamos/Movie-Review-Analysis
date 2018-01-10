@@ -1,14 +1,12 @@
 import pandas as pd
 import numpy as np
-from matplotlib import pyplot
+import matplotlib.pyplot as plt
 
 from keras.models import Sequential, Model
 from keras.layers import Dense, Dropout, Activation, BatchNormalization, Conv1D, Flatten, MaxPooling1D, Embedding
 from keras import optimizers, regularizers
 #from keras.optimizers import Nadam
 import keras.utils
-from keras.preprocessing.text import one_hot
-from keras.preprocessing.sequence import pad_sequences
 
 from sklearn.metrics import accuracy_score
 from sklearn.utils import shuffle
@@ -18,104 +16,86 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import RegexpTokenizer
 
+import preprocessing as pr
+
 # random seed
 seed = 7
 np.random.seed(seed)
 
-### Load data ###
-
-def get_review(file):
-    with open(file) as file:
-        review = file.readlines()
-    review = [x.strip() for x in review] 
-    return np.array(review)
-
+# get data
 neg = "data/rt-polarity-neg.txt"
-X_neg = get_review(neg)
+X_neg = pr.get_review(neg)
 y_neg = np.zeros(X_neg.shape)
 
 pos = "data/rt-polarity-pos.txt"
-X_pos = get_review(pos)
+X_pos = pr.get_review(pos)
 y_pos = np.ones(X_pos.shape)
 
 X = np.concatenate((X_neg,X_pos))
 y = np.concatenate((y_neg,y_pos))
 
+vocab_size, mean_length, max_length, padded_data = pr.process_data(X)
 
-### Cleaning the reviews ###
+def train_model(model, epochs, train_data, validation_data, train_labels, validation_labels):
+    params_train = []
+    params_valid = []
+    for i in range(epochs):
+        print('Epoch n°' + str(i+1))
+        train_data, train_labels = shuffle(train_data, train_labels)
+        model.fit(train_data, train_labels, epochs=1, batch_size=64, verbose = 2)
+        print("accuracy of neural network :")
+        err_train = model.evaluate(train_data, train_labels)
+        err_valid = model.evaluate(validation_data, validation_labels)
+        print(err_valid)
+        params_train.append(err_train)
+        params_valid.append(err_valid)
+    return params_train, params_valid
 
-# The data has been already cleaned up somewhat: 
-# --> The dataset is comprised of only English reviews.
-# --> All text has been converted to lowercase.
-# --> There is white space around punctuation like periods, commas, and brackets.
-# --> Text has been split into one sentence per line.
-
-def process_row(sentence):
-    '''
-    Convert to lowercase
-    Remove ponctuation 
-    Remove unecessary words (stopwords)
-    '''
-    sentence = sentence.lower()
-    tokenizer = RegexpTokenizer(r'\w+')
-    tokens = tokenizer.tokenize(sentence)
-    filtered_words = list(filter(lambda token: token not in stopwords.words('english'), tokens))
-    #Transform all plurals and conjugated verbs into simple form?
-    return filtered_words
-
-def process_data(data):
-    data_clean = []
-    for d in data:
-        data_clean.append(process_row(d))
+def plot_params(params_train, params_valid):
+    plt.plot(np.array(params_train).T[1],label='Train', C='C0')
+    plt.plot(np.array(params_valid).T[1],label='Validation', C='C5', alpha=0.8)
+    plt.legend(loc='best')
+    plt.title('Accuracy across iterations')
+    plt.show()
     
-    vocab_size = len(np.unique(np.hstack(data_clean)))
-    print("Number of words: ", vocab_size)
-    
-    result = [len(d) for d in data_clean]
-    mean_length = np.mean(result)
-    max_length = np.max(result)
-    print("Mean %.2f words" % (mean_length))
-    pyplot.boxplot(result)
-    pyplot.show()
-    
-    encoded_data = [one_hot(" ".join(d), vocab_size) for d in data_clean]
-    padded_data = pad_sequences(encoded_data, maxlen=max_length, padding='post')
-    
-    return vocab_size, mean_length, max_length, padded_data
-
-vocab_size, mean_length, max_length, padded_data = process_data(X)
+    plt.plot(np.array(params_train).T[0],label='Train', C='C0')
+    plt.plot(np.array(params_valid).T[0],label='Validation', C='C5', alpha=0.8)
+    plt.legend(loc='best')
+    plt.title('Loss across iterations')
+    plt.show()
 
 ###############################################################################################
 
-### Model definition ###
 ### Multilayer perceptron ###
 
-def neural_network():
+def mlp_network():
     model = Sequential()
-    model.add(Embedding(input_dim=vocab_size, output_dim=32, input_length=max_length))
+    model.add(Embedding(input_dim=vocab_size, output_dim=64, input_length=max_length))
     model.add(Flatten())
-    model.add(Dense(250, activation='relu'))
+    model.add(Dense(50, activation='relu'))
+    model.add(Dropout(0.7))
+    model.add(Dense(25, activation='relu'))
+    model.add(Dropout(0.7))
     model.add(Dense(1, activation='sigmoid'))
     model.compile(optimizer='adam', loss='binary_crossentropy',metrics=['accuracy'])
     return model
 
-model1 = neural_network()
-model1.summary()
-
-train_data, validation_data, train_labels, validation_labels = train_test_split(padded_data, y, train_size=0.8, test_size=0.2)
+mlp_model = mlp_network()
+mlp_model.summary()
 
 # Fit the model
-train_data, train_labels = shuffle(train_data, train_labels)
-model1.fit(train_data, train_labels, epochs=8, batch_size=64, verbose=1)
+epochs = 5
+model = mlp_model
+mlp_train_data, mlp_validation_data, mlp_train_labels, mlp_validation_labels = train_test_split(padded_data, y, train_size=0.8, test_size=0.2)
+params_train_mlp, params_valid_mlp = train_model(model, epochs, mlp_train_data, mlp_validation_data, mlp_train_labels, mlp_validation_labels)
 
-# Final evaluation of the model
-loss, accuracy = model1.evaluate(validation_data, validation_labels, verbose=0)
-print('\nLoss: %.2f' % (loss))
-print('Accuracy: %.2f' % (accuracy*100))
+# Evaluation of the model
+plot_params(params_train_mlp, params_valid_mlp)
 
 ##############################################################################################
 
 ### Convolutional neural network definition ###
+
 def conv_network():
     # create the model
     model = Sequential()
@@ -134,12 +114,12 @@ def conv_network():
 conv_model = conv_network()
 conv_model.summary()
 
-conv_train_data, conv_validation_data, conv_train_labels, conv_validation_labels = train_test_split(padded_data, y, train_size=0.8, test_size=0.2)
-
 # Fit the model
-conv_train_data, conv_train_labels = shuffle(conv_train_data, conv_train_labels)
-conv_model.fit(conv_train_data, conv_train_labels, epochs=8, batch_size=64, verbose=1)
+epochs = 5
+model = conv_model
+conv_train_data, conv_validation_data, conv_train_labels, conv_validation_labels = train_test_split(padded_data, y, train_size=0.8, test_size=0.2)
+params_train_conv, params_valid_conv = train_model(model, epochs, conv_train_data, conv_validation_data, conv_train_labels, conv_validation_labels)
 
 # Final evaluation of the model
-accuracy = conv_model.evaluate(conv_validation_data, conv_validation_labels, verbose=0)
-print('Accuracy: %.2f' % (accuracy[1]*100))
+plot_params(params_train_conv, params_valid_conv)
+
