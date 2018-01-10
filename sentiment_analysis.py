@@ -94,6 +94,22 @@ plot_params(params_train_mlp, params_valid_mlp)
 
 ##############################################################################################
 
+### Callback Class Definition ###
+# Create callback class to get the accuracy and loss
+class AccuracyLossHistory(keras.callbacks.Callback):
+    def __init__(self, val_data):
+        self.val_data = val_data
+    
+    def on_train_begin(self, logs={}):
+        self.train = []
+        self.val = []
+
+    def on_epoch_end(self, batch, logs={}):
+        self.train.append([logs.get('loss'), logs.get('acc')])
+        x, y = self.val_data
+        loss, acc = self.model.evaluate(x, y, verbose=0)
+        self.val.append([loss, acc])
+
 ### Convolutional neural network definition ###
 
 def conv_network():
@@ -102,10 +118,16 @@ def conv_network():
     
     # word embedding into vectors of numbers
     model.add(Embedding(input_dim=vocab_size, output_dim=32, input_length=max_length))
-    model.add(Conv1D(filters=32, kernel_size=3, padding='same', activation='relu'))
+    
+    model.add(Conv1D(filters=32, kernel_size=3, padding='same', activation='relu', kernel_regularizer=regularizers.l2(0.05),
+            activity_regularizer=regularizers.l1(0.05)))
     model.add(MaxPooling1D(pool_size=2))
+    
+    model.add(Conv1D(filters=16, kernel_size=3, padding='same', activation='relu'))
+    model.add(MaxPooling1D(pool_size=2))
+    
     model.add(Flatten())
-    model.add(Dense(250, activation='relu'))
+    model.add(Dense(20, activation='relu'))
     model.add(Dense(1, activation='sigmoid'))
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
     return model
@@ -118,8 +140,12 @@ conv_model.summary()
 epochs = 5
 model = conv_model
 conv_train_data, conv_validation_data, conv_train_labels, conv_validation_labels = train_test_split(padded_data, y, train_size=0.8, test_size=0.2)
-params_train_conv, params_valid_conv = train_model(model, epochs, conv_train_data, conv_validation_data, conv_train_labels, conv_validation_labels)
+
+# create an instance of accuracy history
+history = AccuracyLossHistory((conv_validation_data, conv_validation_labels))
+
+conv_train_data, conv_train_labels = shuffle(conv_train_data, conv_train_labels)
+fitted = model.fit(conv_train_data, conv_train_labels, epochs=epochs, batch_size=64, verbose = 2, callbacks=[history])
 
 # Final evaluation of the model
-plot_params(params_train_conv, params_valid_conv)
-
+plot_params(history.train, history.val)
