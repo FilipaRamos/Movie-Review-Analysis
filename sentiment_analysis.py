@@ -113,23 +113,23 @@ class AccuracyLossHistory(keras.callbacks.Callback):
 ### Convolutional neural network definition ###
 
 def conv_network():
-    # create the model
+    #create the model
     model = Sequential()
     
-    # word embedding into vectors of numbers
-    model.add(Embedding(input_dim=vocab_size, output_dim=32, input_length=max_length))
-    
-    model.add(Conv1D(filters=32, kernel_size=3, padding='same', activation='relu', kernel_regularizer=regularizers.l2(0.05),
-            activity_regularizer=regularizers.l1(0.05)))
+    model.add(Embedding(input_dim=vocab_size, output_dim=64, input_length=max_length))
+    model.add(BatchNormalization())
+    model.add(Dropout(0.6))
+    model.add(Conv1D(filters=64, kernel_size=3, padding="same", activation='relu'))
+    model.add(BatchNormalization())
     model.add(MaxPooling1D(pool_size=2))
-    
-    model.add(Conv1D(filters=16, kernel_size=3, padding='same', activation='relu'))
-    model.add(MaxPooling1D(pool_size=2))
-    
+    model.add(BatchNormalization())
     model.add(Flatten())
-    model.add(Dense(20, activation='relu'))
-    model.add(Dense(1, activation='sigmoid'))
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.add(Dropout(0.5))
+    model.add(Dense(50, activation="relu"))
+    model.add(BatchNormalization())
+    model.add(Dropout(0.5))
+    model.add(Dense(1, activation="sigmoid"))
+    model.compile(loss="binary_crossentropy", optimizer="adam", metrics=["accuracy"])
     return model
 
 # create convolutional model
@@ -137,7 +137,7 @@ conv_model = conv_network()
 conv_model.summary()
 
 # Fit the model
-epochs = 5
+epochs = 8
 model = conv_model
 conv_train_data, conv_validation_data, conv_train_labels, conv_validation_labels = train_test_split(padded_data, y, train_size=0.8, test_size=0.2)
 
