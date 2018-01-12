@@ -36,20 +36,21 @@ y = np.concatenate((y_neg,y_pos))
 
 vocab_size, mean_length, max_length, padded_data = pr.process_data(X)
 
-def train_model(model, epochs, train_data, validation_data, train_labels, validation_labels):
-    params_train = []
-    params_valid = []
-    for i in range(epochs):
-        print('Epoch n°' + str(i+1))
-        train_data, train_labels = shuffle(train_data, train_labels)
-        model.fit(train_data, train_labels, epochs=1, batch_size=64, verbose = 2)
-        print("accuracy of neural network :")
-        err_train = model.evaluate(train_data, train_labels)
-        err_valid = model.evaluate(validation_data, validation_labels)
-        print(err_valid)
-        params_train.append(err_train)
-        params_valid.append(err_valid)
-    return params_train, params_valid
+### Callback Class Definition ###
+# Create callback class to get the accuracy and loss
+class AccuracyLossHistory(keras.callbacks.Callback):
+    def __init__(self, val_data):
+        self.val_data = val_data
+    
+    def on_train_begin(self, logs={}):
+        self.train = []
+        self.val = []
+
+    def on_epoch_end(self, batch, logs={}):
+        self.train.append([logs.get('loss'), logs.get('acc')])
+        x, y = self.val_data
+        loss, acc = self.model.evaluate(x, y, verbose=0)
+        self.val.append([loss, acc])
 
 def plot_params(params_train, params_valid):
     plt.plot(np.array(params_train).T[1],label='Train', C='C0')
@@ -94,22 +95,6 @@ plot_params(params_train_mlp, params_valid_mlp)
 
 ##############################################################################################
 
-### Callback Class Definition ###
-# Create callback class to get the accuracy and loss
-class AccuracyLossHistory(keras.callbacks.Callback):
-    def __init__(self, val_data):
-        self.val_data = val_data
-    
-    def on_train_begin(self, logs={}):
-        self.train = []
-        self.val = []
-
-    def on_epoch_end(self, batch, logs={}):
-        self.train.append([logs.get('loss'), logs.get('acc')])
-        x, y = self.val_data
-        loss, acc = self.model.evaluate(x, y, verbose=0)
-        self.val.append([loss, acc])
-
 ### Convolutional neural network definition ###
 
 def conv_network():
@@ -149,3 +134,17 @@ fitted = model.fit(conv_train_data, conv_train_labels, epochs=epochs, batch_size
 
 # Final evaluation of the model
 plot_params(history.train, history.val)
+
+
+##############################################################################################
+
+### Recurrent neural network definition ###
+
+def lstm_model():
+    model = Sequential()
+    model.add(Embedding(input_dim=vocab_size, output_dim=32, input_length=max_length))
+    model.add(LSTM(28, return_sequences=False))
+    model.add(Dropout(0.5))
+    model.add(Dense(1, activation='sigmoid'))
+    model.compile(loss='binary_crossentropy',optimizer='adagrad', metrics=["accuracy"])
+    return model
