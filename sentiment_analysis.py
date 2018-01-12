@@ -103,14 +103,15 @@ def conv_network():
     
     model.add(Embedding(input_dim=vocab_size, output_dim=64, input_length=max_length))
     model.add(BatchNormalization())
-    model.add(Dropout(0.6))
+    model.add(Dropout(0.70))
     model.add(Conv1D(filters=64, kernel_size=3, padding="same", activation='relu'))
     model.add(BatchNormalization())
     model.add(MaxPooling1D(pool_size=2))
     model.add(BatchNormalization())
     model.add(Flatten())
-    model.add(Dropout(0.5))
-    model.add(Dense(50, activation="relu"))
+    model.add(Dropout(0.6))
+    model.add(Dense(50, activation="relu", kernel_regularizer=regularizers.l2(0.00001),
+                activity_regularizer=regularizers.l1(0.00001)))
     model.add(BatchNormalization())
     model.add(Dropout(0.5))
     model.add(Dense(1, activation="sigmoid"))
@@ -122,7 +123,7 @@ conv_model = conv_network()
 conv_model.summary()
 
 # Fit the model
-epochs = 8
+epochs = 10
 model = conv_model
 conv_train_data, conv_validation_data, conv_train_labels, conv_validation_labels = train_test_split(padded_data, y, train_size=0.8, test_size=0.2)
 
@@ -130,11 +131,10 @@ conv_train_data, conv_validation_data, conv_train_labels, conv_validation_labels
 history = AccuracyLossHistory((conv_validation_data, conv_validation_labels))
 
 conv_train_data, conv_train_labels = shuffle(conv_train_data, conv_train_labels)
-fitted = model.fit(conv_train_data, conv_train_labels, epochs=epochs, batch_size=64, verbose = 2, callbacks=[history])
+fitted = model.fit(conv_train_data, conv_train_labels, epochs=epochs, batch_size=64, verbose=2, callbacks=[history])
 
 # Final evaluation of the model
 plot_params(history.train, history.val)
-
 
 ##############################################################################################
 
