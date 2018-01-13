@@ -6,6 +6,7 @@ from nltk.corpus import stopwords
 from nltk.tokenize import RegexpTokenizer
 
 from keras.preprocessing.text import one_hot
+from keras.preprocessing.text import hashing_trick
 from keras.preprocessing.sequence import pad_sequences
 
 
@@ -33,22 +34,26 @@ def process_row(sentence):
     #Transform all plurals and conjugated verbs into simple form?
     return filtered_words
 
-def process_data(data):
+def process_data(data, method):
     data_clean = []
     for d in data:
         data_clean.append(process_row(d))
     
     vocab_size = len(np.unique(np.hstack(data_clean)))
     print("Number of words: ", vocab_size)
-    
+
     result = [len(d) for d in data_clean]
     mean_length = np.mean(result)
     max_length = np.max(result)
     print("Mean %.2f words" % (mean_length))
     plt.boxplot(result)
     plt.show()
+
+    if method == 'onehot':
+        encoded_data = [one_hot(" ".join(d), vocab_size) for d in data_clean]
+    else if method == 'hash':
+        encoded_data = [hashing_trick(" ".join(d), vocab_size, hash_function='md5') for d in data_clean]
     
-    encoded_data = [one_hot(" ".join(d), vocab_size) for d in data_clean]
     padded_data = pad_sequences(encoded_data, maxlen=max_length, padding='post')
     
     return vocab_size, mean_length, max_length, padded_data

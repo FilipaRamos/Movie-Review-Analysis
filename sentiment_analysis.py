@@ -34,7 +34,10 @@ y_pos = np.ones(X_pos.shape)
 X = np.concatenate((X_neg,X_pos))
 y = np.concatenate((y_neg,y_pos))
 
-vocab_size, mean_length, max_length, padded_data = pr.process_data(X)
+## For one hot encoding ##
+vocab_size, mean_length, max_length, padded_data = pr.process_data(X, 'onehot')
+## For hashing trick encoding ##
+#vocab_size, mean_length, max_length, padded_data = pr.process_data(X, 'hash')
 
 ### Callback Class Definition ###
 # Create callback class to get the accuracy and loss
@@ -131,7 +134,7 @@ conv_train_data, conv_validation_data, conv_train_labels, conv_validation_labels
 history = AccuracyLossHistory((conv_validation_data, conv_validation_labels))
 
 conv_train_data, conv_train_labels = shuffle(conv_train_data, conv_train_labels)
-fitted = model.fit(conv_train_data, conv_train_labels, epochs=epochs, batch_size=64, verbose=2, callbacks=[history])
+model.fit(conv_train_data, conv_train_labels, epochs=epochs, batch_size=64, verbose=2, callbacks=[history])
 
 # Final evaluation of the model
 plot_params(history.train, history.val)
