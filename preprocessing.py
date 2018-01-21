@@ -1,59 +1,36 @@
 import numpy as np
-import matplotlib.pyplot as plt
-
-import nltk
-from nltk.corpus import stopwords
-from nltk.tokenize import RegexpTokenizer
 
 from keras.preprocessing.text import one_hot
-from keras.preprocessing.text import hashing_trick
 from keras.preprocessing.sequence import pad_sequences
 
+from gensim.models import Word2Vec
 
-### Load data ###
-
-def get_review(file):
-    with open(file) as file:
-        review = file.readlines()
-    review = [x.strip() for x in review] 
-    return np.array(review)
-
-
-### Cleaning the reviews ###
-
-def process_row(sentence):
-    '''
-    Convert to lowercase
-    Remove ponctuation 
-    Remove unecessary words (stopwords)
-    '''
-    sentence = sentence.lower()
-    tokenizer = RegexpTokenizer(r'\w+')
-    tokens = tokenizer.tokenize(sentence)
-    filtered_words = list(filter(lambda token: token not in stopwords.words('english'), tokens))
-    #Transform all plurals and conjugated verbs into simple form?
-    return filtered_words
-
-def process_data(data, method):
-    data_clean = []
-    for d in data:
-        data_clean.append(process_row(d))
-    
-    vocab_size = len(np.unique(np.hstack(data_clean)))
-    print("Number of words: ", vocab_size)
-
-    result = [len(d) for d in data_clean]
-    mean_length = np.mean(result)
-    max_length = np.max(result)
-    print("Mean %.2f words" % (mean_length))
-    plt.boxplot(result)
-    plt.show()
-
-    if method == 'onehot':
-        encoded_data = [one_hot(" ".join(d), vocab_size) for d in data_clean]
-    else if method == 'hash':
-        encoded_data = [hashing_trick(" ".join(d), vocab_size, hash_function='md5') for d in data_clean]
-    
+def onehot_encoding(data_clean, vocab_size, max_length):
+    encoded_data = [one_hot(" ".join(d), vocab_size) for d in data_clean]
     padded_data = pad_sequences(encoded_data, maxlen=max_length, padding='post')
-    
-    return vocab_size, mean_length, max_length, padded_data
+    return padded_data
+
+def hash_encoding(data_clean, vocab_size, max_length):
+    encoded_data = [hashing_trick(" ".join(d), vocab_size, hash_function='md5') for d in data_clean]
+    padded_data = pad_sequences(encoded_data, maxlen=max_length, padding='post')
+    return padded_data
+
+def word2vec_embeding(data_clean, max_length, min_count, size, window, sg):
+    '''
+    min_count: words with an occurrence less than this count will be ignored
+    size:  number of dimensions of the embeddin
+    window: maximum distance between a target word and words around the target word
+    sg: 0 CBOW, 1 skipgram
+    '''
+    embedding = Word2Vec(data_clean, min_count, size, window, sg)
+    X_vecs = embedding.wv
+
+    # Making all the input the same lenght: max_lenght
+    data_length = len(data_clean)
+    indexes = set(np.random.choice(data_length, data_length, replace=False))
+    X_process = np.zeros((data_length, max_length, size))
+    for i, index in enumerate(indexes):
+        for t, token in enumerate(data_clean[index]):
+            X_process[i, t, :] = X_vecs[token]
+
+    return embedding, X_process
