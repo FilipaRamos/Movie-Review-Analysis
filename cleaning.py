@@ -35,7 +35,7 @@ def process_row(sentence, method='with_stopwords', customize_stopwords=None):
             filtered_words = list(filter(lambda token: token not in stopwords.words('english'), filtered_words))
         return filtered_words
     
-def process_data(data,method='with_stopwords', customize_stopwords=None):
+def process_data(data,method='with_stopwords', customize_stopwords=[]):
     data_clean = []
     for d in data:
         data_clean.append(process_row(d, method, customize_stopwords))   

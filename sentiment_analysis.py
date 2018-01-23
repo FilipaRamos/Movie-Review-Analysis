@@ -1,28 +1,23 @@
-import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
 from keras.models import Sequential, Model
 from keras.layers import Dense, Dropout, Activation, BatchNormalization, Conv1D, Flatten, MaxPooling1D, Embedding
 from keras import optimizers, regularizers
-import keras.utils
 
-from sklearn.metrics import accuracy_score
 from sklearn.utils import shuffle
 from sklearn.model_selection import train_test_split
-
-from nltk.corpus import stopwords
-from nltk.tokenize import RegexpTokenizer
+from sklearn.metrics import confusion_matrix
 
 import cleaning as cl
 import preprocessing as pr
-import tools
+import tools 
 
 # random seed
 seed = 7
 np.random.seed(seed)
 
-## get data ##
+# get data
 neg = "data/rt-polarity-neg.txt"
 X_neg = cl.get_review(neg)
 y_neg = np.zeros(X_neg.shape)
@@ -34,21 +29,20 @@ y_pos = np.ones(X_pos.shape)
 X = np.concatenate((X_neg,X_pos))
 y = np.concatenate((y_neg,y_pos))
 
-## clean data ##
-customize_stopwords = [
-    'movie', 'movies'
-    , 'film', 'films'
-    , 'character', 'characters'
-    , 'make', 'makes', 'made'
-    , 'feel', 'feels', 'felt'
-    , 'seem', 'seems', 'seemed'
-    , 'one'
-]
-X_clean = cl.process_data(X, 'without_custom', customize_stopwords)
-
+# clean data
+# customize_stopwords = [
+#     'movie', 'movies'
+#     , 'film', 'films'
+#     , 'character', 'characters'
+#     , 'make', 'makes', 'made'
+#     , 'feel', 'feels', 'felt'
+#     , 'seem', 'seems', 'seemed'
+#     , 'one'
+# ]
+X, y = shuffle(X, y)
+X_clean = cl.process_data(X, 'with_stopwords')
 vocab_size, mean_length, max_length, Q1_length, med_length, Q3_length = cl.data_stat(X_clean)
-cl.word_cloud(X_clean[:int(len(X_clean)/2)], 'viridis')
-cl.word_cloud(X_clean[int(len(X_clean)/2):], 'magma')
+
 
 ## preprocess data ##
 # For one hot encoding
@@ -56,17 +50,20 @@ X_onehot = pr.onehot_encoding(X_clean, vocab_size, max_length)
 # For hashing trick encoding
 X_hash = pr.hash_encoding(X_clean, vocab_size, max_length)
 # For Word2Vec Embedding
-word2vec_model, X_wor2vec = pr.word2vec_embeding(X_clean, max_length, min_count=1, size=200, window=3, sg=0)
+min_count = 15
+vector_size = 100
+window = 5
+negative = 0
+hs = 1
+sg = 1
+worker = 2
+iter = 40
+X_word2vec = pr.word2vec_embeding(X_clean, max_length, min_count, vector_size, window, negative, hs, worker, sg, iter)
 
 ## Split dataset 
-def split_test(X,y):
-    data = X
-    data, y = shuffle(data, y)
-    train_data, test_data, train_labels, test_labels = train_test_split(data, y, train_size=0.8, test_size=0.2)
-    return train_data, test_data, train_labels, test_labels
-
-train_data_oh, test_data_oh, train_labels_oh, test_labels_oh = split_test(X_onehot, y)
-train_data_w2v, test_data_w2v, train_labels_w2v, test_labels_w2v = split_test(X_wor2vec, y)
+train_data_oh, test_data_oh, train_labels_oh, test_labels_oh = pr.split_test(X_onehot, y)
+train_data_hs, test_data_hs, train_labels_hs, test_labels_hs = pr.split_test(X_onehot, y)
+train_data_w2v, test_data_w2v, train_labels_w2v, test_labels_w2v = pr.split_test(X_wor2vec, y)
 
 ###############################################################################################
 
@@ -86,18 +83,18 @@ def mlp_network():
 
 ##############################################################################################
 
-### Convolutional neural network definition ###
+### Convolutional neural network ###
 
-def conv_network(encoding, vocab_size, max_length, vector_size=None):
+def conv_network(encoding, vocab_size, max_length, vector_size=0):
     '''
-    encoding: 'one-hot' or 'word2vec'
+    encoding: 'discrete' or 'word2vec'
     vector_size: size of the word2vec embedding
     '''
 
     #create the model
     model = Sequential()
     
-    if encoding == 'one-hot':
+    if encoding == 'discrete':
         model.add(Embedding(input_dim=vocab_size, output_dim=64, input_length=max_length))
         model.add(BatchNormalization())
         model.add(Dropout(0.70))
@@ -106,6 +103,8 @@ def conv_network(encoding, vocab_size, max_length, vector_size=None):
                          , activation='relu'))
     
     elif encoding == 'word2vec':
+        model.add(BatchNormalization(input_shape=(max_length, vector_size)))
+        #model.add(Dropout(0.3, input_shape=(max_length, vector_size)))
         model.add(Conv1D(filters=64, kernel_size=3
                          , padding="same"
                          , activation='relu'
@@ -127,30 +126,9 @@ def conv_network(encoding, vocab_size, max_length, vector_size=None):
     
     return model
 
-## create convolutional model ##
-
-model = conv_network('one-hot', vocab_size, max_length)
-#model_w2v = conv_network('word2vec', vocab_size, max_length, 200)
-conv_model.summary()
-
-## Fit the model ##
-
-# create an instance of accuracy history
-history = tools.AccuracyLossHistory((test_data_oh, test_labels_oh))
-#history_w2v = tools.AccuracyLossHistory((test_data_w2v, test_labels_w2v))
-
-train_data_oh, train_labels_oh = shuffle(train_data_oh, train_labels_oh)
-#train_data_w2v, train_labels_w2v = shuffle(train_data_w2v, train_labels_w2v)
-model.fit(train_data_oh, train_labels_oh, epochs=10, batch_size=64, verbose=2, callbacks=[history])
-#model_w2v.fit(train_data_w2v, train_labels_w2v, epochs=100, batch_size=64, verbose = 2, callbacks=[history_w2v])
-
-# Final evaluation of the model
-tools.plot_params(history.train, history.val)
-#tools.plot_params(history_w2v.train, history_w2v.val)
-
 ##############################################################################################
 
-### Recurrent neural network definition ###
+### Recurrent neural network ###
 
 def lstm_model():
     model = Sequential()
@@ -160,3 +138,70 @@ def lstm_model():
     model.add(Dense(1, activation='sigmoid'))
     model.compile(loss='binary_crossentropy',optimizer='adagrad', metrics=["accuracy"])
     return model
+
+##############################################################################################
+
+### Train models and get results ###
+
+def train_embedding_model(X_encoded, y, vocab_size, max_length, method, epochs, vector_size=0):
+    '''
+    method: discrete or word2vec
+    '''
+    train_data, test_data, train_labels, test_labels = train_test_split(X_encoded, y
+                                                                                , test_size=0.2, shuffle=False)
+    model = conv_network(method, vocab_size, max_length, vector_size)
+    history = tools.AccuracyLossHistory((test_data, test_labels))
+    model.fit(train_data, train_labels, epochs=epochs, batch_size=64, verbose=2, callbacks=[history])
+    
+    tools.plot_params(history.train, history.val)
+    
+    index = np.argmax(np.asarray(history.val).T[1])
+    print('** Best ** \nValidation loss %.2f \nValidation accuracy %.2f' % (history.val[index][0], history.val[index][1]*100))
+    print('\n** Last ** \nValidation loss %.2f \nValidation accuracy %.2f' % (history.val[epochs-1][0], history.val[epochs-1][1]*100))
+    
+    return history, [train_data, test_data, train_labels, test_labels]
+
+def inverse_to_categorical(array):
+    res = []
+    for i in range(len(array)):
+        if array[i] > 0.5:
+            res.append(1)
+        else:
+            res.append(0)
+    return res
+
+# One-hot encoding
+
+X_onehot = pr.onehot_encoding(X_clean, vocab_size, max_length)
+history_oh, data_oh = train_embedding_model(X_onehot, y, vocab_size, max_length, 'discrete', 12)
+
+yprob_oh = history_oh.model.predict(data_oh[1])
+ypred_oh = inverse_to_categorical(yprob_oh)
+print('Confusion Matrix:\n', np.round(confusion_matrix(data_oh[3], ypred_oh)*100/len(data_oh[3]),2))
+
+# Hashing encoding
+
+X_hash = pr.hash_encoding(X_clean, vocab_size, max_length)
+history_hs, data_hs = train_embedding_model(X_hash, y, vocab_size, max_length, 'discrete', 15)
+
+yprob_hs = history_hs.model.predict(data_hs[1])
+ypred_hs = inverse_to_categorical(yprob_hs)
+print('Confusion Matrix:\n', np.round(confusion_matrix(data_hs[3], ypred_hs)*100/len(data_hs[3]),2))
+
+# Word2Vec embedding (skipgram)
+
+min_count = 15
+vector_size = 100
+window = 5
+negative = 0
+hs = 1
+sg = 1
+workers = 2
+iter = 40
+
+X_word2vec = pr.word2vec_embeding(X_clean, max_length, min_count, vector_size, window, negative, hs, workers, sg, iter)
+history_w2v, data_w2v = train_embedding_model(X_word2vec, y, vocab_size, max_length, 'word2vec', 12, vector_size)
+
+yprob_w2v = history_w2v.model.predict(data_w2v[1])
+ypred_w2v = inverse_to_categorical(yprob_w2v)
+print('Confusion Matrix:\n', np.round(confusion_matrix(data_w2v[3], ypred_w2v)*100/len(data_w2v[3]),2))
