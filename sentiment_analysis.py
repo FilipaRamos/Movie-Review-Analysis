@@ -43,28 +43,6 @@ X, y = shuffle(X, y)
 X_clean = cl.process_data(X, 'with_stopwords')
 vocab_size, mean_length, max_length, Q1_length, med_length, Q3_length = cl.data_stat(X_clean)
 
-
-## preprocess data ##
-# For one hot encoding
-X_onehot = pr.onehot_encoding(X_clean, vocab_size, max_length)
-# For hashing trick encoding
-X_hash = pr.hash_encoding(X_clean, vocab_size, max_length)
-# For Word2Vec Embedding
-min_count = 15
-vector_size = 100
-window = 5
-negative = 0
-hs = 1
-sg = 1
-worker = 2
-iter = 40
-X_word2vec = pr.word2vec_embeding(X_clean, max_length, min_count, vector_size, window, negative, hs, worker, sg, iter)
-
-## Split dataset 
-train_data_oh, test_data_oh, train_labels_oh, test_labels_oh = pr.split_test(X_onehot, y)
-train_data_hs, test_data_hs, train_labels_hs, test_labels_hs = pr.split_test(X_onehot, y)
-train_data_w2v, test_data_w2v, train_labels_w2v, test_labels_w2v = pr.split_test(X_wor2vec, y)
-
 ###############################################################################################
 
 ### Multilayer perceptron ###
